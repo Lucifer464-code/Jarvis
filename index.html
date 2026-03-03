@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>J.A.R.V.I.S — Just A Rather Very Intelligent System</title>
+<title>J.A.R.V.I.S — Powered by Gemini</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;900&family=Rajdhani:wght@300;400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -248,6 +248,65 @@
 
   /* Voice status */
   #voiceStatus{font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:0.1em;color:var(--text-muted);margin-top:3px;text-align:center;min-height:12px}
+
+  /* ── API KEY MODAL ── */
+  #apiModal {
+    position:fixed; inset:0; z-index:999;
+    background:rgba(1,10,18,0.96);
+    display:flex; align-items:center; justify-content:center;
+    backdrop-filter:blur(8px);
+  }
+  #apiModal::before {
+    content:''; position:absolute; inset:0;
+    background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan-line) 2px,var(--scan-line) 4px);
+    pointer-events:none;
+  }
+  .modal-box {
+    position:relative; z-index:1;
+    width:460px;
+    border:1px solid var(--holo-border);
+    background:var(--panel);
+    padding:36px 32px;
+    clip-path:polygon(0 0,calc(100% - 20px) 0,100% 20px,100% 100%,20px 100%,0 calc(100% - 20px));
+    box-shadow:0 0 60px rgba(0,212,255,0.08);
+    display:flex; flex-direction:column; align-items:center; gap:18px;
+    text-align:center;
+  }
+  .modal-arc { position:relative; width:80px; height:80px; display:flex; align-items:center; justify-content:center; }
+  .m-ring { position:absolute; border-radius:50%; border:1px solid var(--holo-border); animation:arcSpin linear infinite; }
+  .m-ring:nth-child(1){width:80px;height:80px;animation-duration:10s;border-color:rgba(0,212,255,0.35)}
+  .m-ring:nth-child(2){width:60px;height:60px;animation-duration:7s;animation-direction:reverse;border-color:rgba(0,212,255,0.2)}
+  .m-ring:nth-child(3){width:40px;height:40px;animation-duration:5s;border-color:rgba(0,212,255,0.3)}
+  .m-ring::before{content:'';position:absolute;top:-1px;left:20%;width:30%;height:2px;background:var(--holo);box-shadow:0 0 8px var(--holo)}
+  .m-core{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle,white 0%,var(--holo) 50%,rgba(0,212,255,0.1) 100%);box-shadow:0 0 16px var(--holo),0 0 32px rgba(0,212,255,0.5);z-index:1;animation:corePulse 2s ease-in-out infinite}
+  .modal-title { font-family:'Orbitron',monospace; font-size:15px; font-weight:700; color:var(--holo); letter-spacing:0.25em; text-shadow:0 0 20px var(--holo); }
+  .modal-sub { font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--text-muted); letter-spacing:0.12em; line-height:1.8; }
+  .modal-input-wrap { width:100%; position:relative; }
+  #apiKeyInput {
+    width:100%; background:rgba(0,212,255,0.04); border:1px solid var(--holo-border);
+    color:var(--holo); font-family:'Share Tech Mono',monospace; font-size:11px;
+    letter-spacing:0.08em; padding:12px 14px; outline:none;
+    clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);
+    transition:border-color 0.2s;
+  }
+  #apiKeyInput:focus { border-color:var(--holo); box-shadow:0 0 16px rgba(0,212,255,0.15); }
+  #apiKeyInput::placeholder { color:var(--text-muted); font-size:10px; }
+  .modal-btn {
+    width:100%; padding:13px; background:transparent; border:1px solid var(--holo);
+    color:var(--holo); font-family:'Orbitron',monospace; font-size:10px; font-weight:600;
+    letter-spacing:0.2em; cursor:pointer;
+    clip-path:polygon(10px 0%,100% 0%,calc(100% - 10px) 100%,0% 100%);
+    transition:all 0.2s;
+  }
+  .modal-btn:hover { background:var(--holo-dim); box-shadow:0 0 24px rgba(0,212,255,0.25); }
+  .modal-hint { font-family:'Share Tech Mono',monospace; font-size:8px; color:var(--text-muted); letter-spacing:0.08em; line-height:1.8; }
+  .modal-hint a { color:rgba(0,212,255,0.6); text-decoration:none; }
+  .modal-hint a:hover { color:var(--holo); }
+  #apiError { font-family:'Share Tech Mono',monospace; font-size:8px; color:var(--red); letter-spacing:0.1em; min-height:12px; }
+
+  /* Key badge in header */
+  #keyBadge { display:none; align-items:center; gap:5px; font-family:'Share Tech Mono',monospace; font-size:8px; color:rgba(74,222,128,0.7); letter-spacing:0.08em; cursor:pointer; }
+  #keyBadge:hover { color:var(--green); }
 </style>
 </head>
 <body>
@@ -270,7 +329,11 @@
     </div>
     <div class="h-right">
       <div class="blip"><div class="blip-dot red"></div><span>STARK v4.2</span></div>
-      <div class="data-ticker"><div class="ticker-inner">SYSTEMS NOMINAL · ALL SUBSYSTEMS ONLINE · THREAT LEVEL: 0 · POWER: 100% · MEMORY ACTIVE</div></div>
+      <div id="keyBadge" onclick="resetApiKey()" title="Click to change API key">
+        <div class="blip-dot green" style="width:5px;height:5px"></div>
+        <span>KEY ACTIVE · RESET</span>
+      </div>
+      <div class="data-ticker"><div class="ticker-inner">SYSTEMS NOMINAL · ALL SUBSYSTEMS ONLINE · THREAT LEVEL: 0 · POWER: 100% · GEMINI ENGINE ACTIVE</div></div>
     </div>
   </header>
 
@@ -433,13 +496,62 @@ Operator: Aakash Mohan
 - Prior: Financial Accountant (Dubai); equity research internships at YES Securities and NVS Brokerage (Mumbai)
 
 Directives:
-- Address Aakash as "Mr. Mohan" or "sir" naturally
+- Address Aakash by his first name "Aakash" — he prefers this over "Mr. Mohan"
 - Handle ANY task: research, writing, coding, financial analysis, strategy, creative work, personal tasks — no limitations
 - Maintain professional, formal, slightly British tone
 - Use web search for current/real-time data
 - Be precise, thorough, efficient
 - Occasional dry JARVIS-style wit is appropriate — never sarcastic
 - Format cleanly using markdown`;
+
+// ── API KEY MANAGEMENT ──
+let API_KEY = '';
+
+function loadApiKey() {
+  try {
+    const stored = localStorage.getItem('jarvis_gemini_key');
+    if (stored) {
+      API_KEY = stored;
+      document.getElementById('apiModal').style.display = 'none';
+      document.getElementById('keyBadge').style.display = 'flex';
+      addLog('API KEY: LOADED FROM STORAGE', true);
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+function submitApiKey() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  const errEl = document.getElementById('apiError');
+  if (!key) { errEl.textContent = '⚠ DIRECTIVE INCOMPLETE — KEY REQUIRED'; return; }
+  if (!key.startsWith('AIza')) { errEl.textContent = '⚠ INVALID KEY FORMAT — MUST BEGIN WITH AIza'; return; }
+  errEl.textContent = '';
+  try { localStorage.setItem('jarvis_gemini_key', key); } catch(e) {}
+  API_KEY = key;
+  document.getElementById('apiModal').style.display = 'none';
+  document.getElementById('keyBadge').style.display = 'flex';
+  addLog('API KEY: AUTHENTICATED', true);
+  addLog('NEURAL LINK: ESTABLISHED', true);
+}
+
+function resetApiKey() {
+  if (!confirm('Reset API key? JARVIS will require re-authentication.')) return;
+  try { localStorage.removeItem('jarvis_gemini_key'); } catch(e) {}
+  API_KEY = '';
+  document.getElementById('apiModal').style.display = 'flex';
+  document.getElementById('keyBadge').style.display = 'none';
+  document.getElementById('apiKeyInput').value = '';
+  addLog('API KEY: RESET');
+}
+
+// Allow Enter key in modal
+document.getElementById('apiKeyInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitApiKey();
+});
+
+// Try loading stored key on boot
+loadApiKey();
 
 let conversationHistory = [];
 let isLoading = false;
@@ -720,41 +832,46 @@ async function sendMessage() {
   appendTyping();
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:1000,
-        system:SYSTEM_PROMPT,
-        tools:[{type:'web_search_20250305',name:'web_search'}],
-        messages:conversationHistory
-      })
-    });
+    // Build Gemini conversation history
+    const geminiContents = conversationHistory.map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: typeof msg.content === 'string' ? msg.content : (Array.isArray(msg.content) ? msg.content.map(b => b.text||'').join('') : String(msg.content)) }]
+    }));
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: geminiContents,
+          generationConfig: { maxOutputTokens: 1500, temperature: 0.7 }
+        })
+      }
+    );
     const data = await res.json();
 
-    let fullText = ''; let usedSearch = false;
-    if (data.content) {
-      for (const b of data.content) {
-        if (b.type==='text') fullText += b.text;
-        if (b.type==='tool_use' && b.name==='web_search') usedSearch = true;
-      }
+    let fullText = '';
+    if (data.candidates && data.candidates[0]?.content?.parts) {
+      fullText = data.candidates[0].content.parts.map(p => p.text || '').join('');
+    } else if (data.error) {
+      throw new Error(data.error.message);
     }
 
     removeTyping();
     if (fullText) {
-      appendMessage('assistant', fullText, usedSearch);
-      conversationHistory.push({ role:'assistant', content: data.content || [{type:'text',text:fullText}] });
+      appendMessage('assistant', fullText, false);
+      conversationHistory.push({ role: 'assistant', content: fullText });
       addLog('RESPONSE DELIVERED', true);
-      if (usedSearch) addLog('WEB SEARCH UTILIZED', true);
       await saveMemory();
     } else {
-      appendMessage('assistant', 'I appear to be experiencing a momentary processing anomaly, sir. Please repeat your directive.');
+      appendMessage('assistant', 'I appear to be experiencing a momentary processing anomaly, Aakash. Please repeat your directive.');
       addLog('PROCESSING ERROR');
     }
   } catch(err) {
     removeTyping();
-    appendMessage('assistant', 'A communication disruption has occurred, sir. Please verify your network connection and reissue the directive.');
+    appendMessage('assistant', `A disruption has occurred: ${err.message || 'Please verify your API key and network connection.'}`);
     addLog('CONNECTION ERROR');
     console.error(err);
   }
@@ -762,5 +879,29 @@ async function sendMessage() {
   isLoading = false; sendBtn.disabled = false; inputEl.focus();
 }
 </script>
+  <!-- API KEY MODAL -->
+  <div id="apiModal">
+    <div class="modal-box">
+      <div class="modal-arc">
+        <div class="m-ring"></div><div class="m-ring"></div><div class="m-ring"></div>
+        <div class="m-core"></div>
+      </div>
+      <div class="modal-title">AUTHENTICATION REQUIRED</div>
+      <div class="modal-sub">
+        JARVIS requires a Google Gemini API key to activate neural link.<br>
+        Free tier available · Your key is stored locally in your browser only.
+      </div>
+      <div class="modal-input-wrap">
+        <input type="password" id="apiKeyInput" placeholder="AIzaSy..." autocomplete="off" />
+      </div>
+      <div id="apiError"></div>
+      <button class="modal-btn" onclick="submitApiKey()">◈ INITIALISE JARVIS ◈</button>
+      <div class="modal-hint">
+        Obtain your free API key at <a href="https://aistudio.google.com" target="_blank">aistudio.google.com</a><br>
+        API keys begin with <span style="color:rgba(0,212,255,0.5)">AIza</span> · Free tier available · Stored locally · Never shared
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
