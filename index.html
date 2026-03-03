@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J.A.R.V.I.S — Just A Rather Very Intelligent System</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;900&family=Rajdhani:wght@300;400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --holo: #00d4ff;
+    --holo-dim: rgba(0,212,255,0.15);
+    --holo-glow: rgba(0,212,255,0.06);
+    --holo-border: rgba(0,212,255,0.22);
+    --red: #ff3c3c;
+    --red-dim: rgba(255,60,60,0.15);
+    --gold: #ffd700;
+    --gold-dim: rgba(255,215,0,0.12);
+    --green: #4ade80;
+    --bg: #010a12;
+    --panel: rgba(0,18,35,0.88);
+    --text: #c8f0ff;
+    --text-dim: rgba(200,240,255,0.5);
+    --text-muted: rgba(200,240,255,0.25);
+    --scan-line: rgba(0,212,255,0.035);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width:100%; height:100%; background:var(--bg); color:var(--text); font-family:'Rajdhani',sans-serif; overflow:hidden; cursor:crosshair; }
+
+  body::before {
+    content:''; position:fixed; inset:0; z-index:0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, var(--scan-line) 2px, var(--scan-line) 4px);
+    pointer-events:none; animation:scanMove 8s linear infinite;
+  }
+  @keyframes scanMove { 0%{background-position:0 0} 100%{background-position:0 40px} }
+
+  body::after {
+    content:''; position:fixed; inset:0; z-index:0;
+    background:
+      radial-gradient(ellipse 70% 50% at 50% 50%, rgba(0,40,80,0.55) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 30% at 5% 50%, rgba(0,100,180,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 30% at 95% 50%, rgba(0,100,180,0.07) 0%, transparent 60%);
+    pointer-events:none;
+  }
+
+  /* ── LAYOUT ── */
+  .hud {
+    position:relative; z-index:1;
+    width:100%; height:100vh;
+    display:grid;
+    grid-template-rows:60px 1fr 88px;
+    grid-template-columns:190px 1fr 190px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    grid-column:1/-1;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 20px;
+    border-bottom:1px solid var(--holo-border);
+    background:linear-gradient(180deg,rgba(0,212,255,0.05) 0%,transparent 100%);
+    position:relative; overflow:hidden;
+  }
+  header::after {
+    content:''; position:absolute; bottom:0; left:0; right:0; height:1px;
+    background:linear-gradient(90deg,transparent,var(--holo),transparent);
+    animation:hline 4s ease-in-out infinite;
+  }
+  @keyframes hline { 0%,100%{opacity:0.3} 50%{opacity:1} }
+
+  .h-left,.h-right { display:flex; align-items:center; gap:14px; font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--text-muted); letter-spacing:0.1em; }
+  .h-center { text-align:center; }
+
+  .jarvis-title { font-family:'Orbitron',monospace; font-size:17px; font-weight:700; color:var(--holo); letter-spacing:0.3em; text-shadow:0 0 20px var(--holo),0 0 40px rgba(0,212,255,0.3); animation:titlePulse 3s ease-in-out infinite; }
+  @keyframes titlePulse { 0%,100%{text-shadow:0 0 20px var(--holo),0 0 40px rgba(0,212,255,0.3)} 50%{text-shadow:0 0 30px var(--holo),0 0 60px rgba(0,212,255,0.5)} }
+  .jarvis-sub { font-family:'Share Tech Mono',monospace; font-size:8px; color:var(--text-muted); letter-spacing:0.22em; margin-top:2px; }
+
+  .blip { display:flex; align-items:center; gap:5px; }
+  .blip-dot { width:6px; height:6px; border-radius:50%; background:var(--holo); box-shadow:0 0 8px var(--holo); animation:blipP 2s ease-in-out infinite; }
+  .blip-dot.red { background:var(--red); box-shadow:0 0 8px var(--red); animation-delay:0.5s; }
+  .blip-dot.gold { background:var(--gold); box-shadow:0 0 8px var(--gold); animation-delay:1s; }
+  .blip-dot.green { background:var(--green); box-shadow:0 0 8px var(--green); animation-delay:0.3s; }
+  @keyframes blipP { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  #clock { font-family:'Share Tech Mono',monospace; font-size:12px; color:var(--holo); letter-spacing:0.1em; }
+  #dateEl { font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--text-muted); letter-spacing:0.08em; }
+
+  /* ── SIDE PANELS ── */
+  .side-panel { padding:12px 10px; border-color:var(--holo-border); display:flex; flex-direction:column; gap:10px; background:var(--panel); position:relative; overflow:hidden; }
+  .side-panel.left { border-right:1px solid var(--holo-border); }
+  .side-panel.right { border-left:1px solid var(--holo-border); }
+
+  .panel-label { font-family:'Orbitron',monospace; font-size:7.5px; letter-spacing:0.18em; color:var(--holo); opacity:0.75; padding-bottom:5px; border-bottom:1px solid var(--holo-border); }
+
+  .corner { position:absolute; width:14px; height:14px; border-color:var(--holo); border-style:solid; opacity:0.5; }
+  .corner.tl{top:6px;left:6px;border-width:1px 0 0 1px} .corner.tr{top:6px;right:6px;border-width:1px 1px 0 0}
+  .corner.bl{bottom:6px;left:6px;border-width:0 0 1px 1px} .corner.br{bottom:6px;right:6px;border-width:0 1px 1px 0}
+
+  /* Arc reactor */
+  .arc-mini { margin:4px auto; width:52px; height:52px; position:relative; display:flex; align-items:center; justify-content:center; }
+  .arc-ring { position:absolute; border-radius:50%; border:1px solid var(--holo-border); animation:arcSpin linear infinite; }
+  .arc-ring:nth-child(1){width:52px;height:52px;border-color:rgba(0,212,255,0.4);animation-duration:8s}
+  .arc-ring:nth-child(2){width:40px;height:40px;border-color:rgba(0,212,255,0.25);animation-duration:6s;animation-direction:reverse}
+  .arc-ring:nth-child(3){width:28px;height:28px;border-color:rgba(0,212,255,0.35);animation-duration:4s}
+  .arc-ring::before { content:''; position:absolute; top:-1px; left:20%; width:30%; height:2px; background:var(--holo); box-shadow:0 0 8px var(--holo); border-radius:2px; }
+  @keyframes arcSpin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  .arc-core { width:14px; height:14px; border-radius:50%; background:radial-gradient(circle,white 0%,var(--holo) 50%,rgba(0,212,255,0.2) 100%); box-shadow:0 0 12px var(--holo),0 0 24px rgba(0,212,255,0.5); z-index:1; animation:corePulse 2s ease-in-out infinite; }
+  @keyframes corePulse { 0%,100%{box-shadow:0 0 12px var(--holo),0 0 24px rgba(0,212,255,0.5)} 50%{box-shadow:0 0 20px var(--holo),0 0 40px rgba(0,212,255,0.8)} }
+
+  /* Stat bars */
+  .stat-row { display:flex; flex-direction:column; gap:2px; }
+  .stat-label { font-family:'Share Tech Mono',monospace; font-size:8px; color:var(--text-muted); letter-spacing:0.06em; }
+  .stat-bar { height:3px; background:rgba(0,212,255,0.08); border-radius:1px; overflow:hidden; }
+  .stat-fill { height:100%; background:linear-gradient(90deg,var(--holo),rgba(0,212,255,0.5)); box-shadow:0 0 6px var(--holo); border-radius:1px; animation:statLoad 2s ease-out forwards; }
+  @keyframes statLoad { from{width:0%} }
+  .stat-val { font-family:'Share Tech Mono',monospace; font-size:8px; color:var(--holo); text-align:right; }
+
+  /* Hex grid */
+  .hex-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:3px; opacity:0.35; }
+  .hex-cell { height:16px; border:1px solid var(--holo-border); clip-path:polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%); background:var(--holo-glow); animation:hexFlicker 4s ease-in-out infinite; }
+  .hex-cell:nth-child(odd){animation-delay:0.5s} .hex-cell:nth-child(3n){animation-delay:1s}
+  @keyframes hexFlicker { 0%,90%,100%{opacity:0.35} 95%{opacity:1;background:var(--holo-dim)} }
+
+  /* Memory counter */
+  .mem-chip { display:flex; justify-content:space-between; align-items:center; padding:4px 7px; border:1px solid var(--holo-border); background:var(--holo-glow); }
+  .mem-chip span { font-family:'Share Tech Mono',monospace; font-size:8px; letter-spacing:0.06em; }
+  .mem-chip .val { color:var(--holo); }
+
+  /* Mini waveform for voice */
+  .waveform { display:flex; align-items:center; justify-content:center; gap:2px; height:24px; }
+  .wave-bar { width:3px; background:var(--holo); border-radius:2px; opacity:0.3; transition:all 0.1s; }
+  .wave-bar.active { opacity:1; animation:wavePulse 0.6s ease-in-out infinite; }
+  .wave-bar:nth-child(1){height:6px} .wave-bar:nth-child(2){height:10px} .wave-bar:nth-child(3){height:16px}
+  .wave-bar:nth-child(4){height:10px} .wave-bar:nth-child(5){height:6px}
+  @keyframes wavePulse {
+    0%,100%{transform:scaleY(0.4)} 50%{transform:scaleY(1.4)}
+  }
+  .wave-bar.active:nth-child(2){animation-delay:0.1s}
+  .wave-bar.active:nth-child(3){animation-delay:0.2s}
+  .wave-bar.active:nth-child(4){animation-delay:0.1s}
+
+  /* ── MAIN CHAT ── */
+  .main-chat { display:flex; flex-direction:column; overflow:hidden; position:relative; }
+  .main-chat::before {
+    content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:460px; height:460px; border-radius:50%;
+    border:1px solid rgba(0,212,255,0.035);
+    box-shadow:inset 0 0 60px rgba(0,212,255,0.025);
+    pointer-events:none; animation:circleBreath 6s ease-in-out infinite;
+  }
+  @keyframes circleBreath { 0%,100%{transform:translate(-50%,-50%) scale(1);opacity:0.5} 50%{transform:translate(-50%,-50%) scale(1.04);opacity:1} }
+
+  #messages { flex:1; overflow-y:auto; padding:18px 24px; scroll-behavior:smooth; position:relative; z-index:1; }
+  #messages::-webkit-scrollbar{width:3px} #messages::-webkit-scrollbar-track{background:transparent} #messages::-webkit-scrollbar-thumb{background:var(--holo-border);border-radius:2px}
+
+  /* Welcome */
+  .welcome { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:8px; text-align:center; padding:20px; }
+  .welcome-arc { position:relative; width:110px; height:110px; display:flex; align-items:center; justify-content:center; margin-bottom:6px; }
+  .w-ring { position:absolute; border-radius:50%; border:1px solid var(--holo-border); animation:arcSpin linear infinite; }
+  .w-ring:nth-child(1){width:110px;height:110px;animation-duration:12s;border-color:rgba(0,212,255,0.3)}
+  .w-ring:nth-child(2){width:88px;height:88px;animation-duration:9s;animation-direction:reverse;border-color:rgba(0,212,255,0.2)}
+  .w-ring:nth-child(3){width:66px;height:66px;animation-duration:6s;border-color:rgba(0,212,255,0.3)}
+  .w-ring:nth-child(4){width:44px;height:44px;animation-duration:4s;animation-direction:reverse;border-color:rgba(0,212,255,0.4)}
+  .w-ring::before{content:'';position:absolute;top:-1px;left:20%;width:30%;height:2px;background:var(--holo);box-shadow:0 0 8px var(--holo)}
+  .w-core { width:26px;height:26px;border-radius:50%;background:radial-gradient(circle,white 0%,var(--holo) 50%,rgba(0,212,255,0.1) 100%);box-shadow:0 0 20px var(--holo),0 0 40px rgba(0,212,255,0.5);z-index:1;animation:corePulse 2s ease-in-out infinite; }
+  .welcome-name { font-family:'Orbitron',monospace; font-size:12px; font-weight:600; color:var(--holo); letter-spacing:0.3em; text-shadow:0 0 20px var(--holo); }
+  .welcome-greeting { font-size:14px; font-weight:300; color:var(--text-dim); letter-spacing:0.06em; max-width:360px; line-height:1.6; }
+  .welcome-chips { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; max-width:500px; margin-top:10px; }
+  .chip { padding:5px 11px; border:1px solid var(--holo-border); background:var(--holo-glow); color:var(--text-dim); font-family:'Share Tech Mono',monospace; font-size:9px; letter-spacing:0.06em; cursor:pointer; transition:all 0.2s; clip-path:polygon(8px 0%,100% 0%,calc(100% - 8px) 100%,0% 100%); }
+  .chip:hover { background:var(--holo-dim); border-color:var(--holo); color:var(--holo); box-shadow:0 0 12px rgba(0,212,255,0.2); }
+
+  /* Messages */
+  .message-row { display:flex; gap:10px; margin-bottom:14px; animation:msgFadeIn 0.4s ease forwards; opacity:0; }
+  @keyframes msgFadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .message-row.user { flex-direction:row-reverse; }
+  .msg-avatar { width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-size:8px;font-weight:700;flex-shrink:0;margin-top:2px;letter-spacing:0.03em;border:1px solid; }
+  .msg-avatar.jarvis-av { background:var(--holo-dim);border-color:var(--holo-border);color:var(--holo);box-shadow:0 0 10px rgba(0,212,255,0.2); }
+  .msg-avatar.user-av { background:var(--red-dim);border-color:rgba(255,60,60,0.3);color:var(--red);box-shadow:0 0 10px rgba(255,60,60,0.2); }
+  .msg-body { flex:1; max-width:600px; }
+  .message-row.user .msg-body { display:flex;flex-direction:column;align-items:flex-end; }
+  .msg-label { font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:0.14em;margin-bottom:4px;opacity:0.6; }
+  .jarvis-label{color:var(--holo)} .user-label{color:var(--red)}
+  .bubble { padding:11px 14px;font-size:13.5px;font-weight:400;line-height:1.7;letter-spacing:0.02em;position:relative; }
+  .bubble.jarvis-bubble { background:linear-gradient(135deg,rgba(0,18,35,0.92),rgba(0,30,55,0.82));border:1px solid var(--holo-border);border-left:2px solid rgba(0,212,255,0.5);color:var(--text);clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%);box-shadow:0 0 18px rgba(0,212,255,0.04); }
+  .bubble.user-bubble { background:linear-gradient(135deg,rgba(35,0,0,0.8),rgba(55,10,10,0.72));border:1px solid rgba(255,60,60,0.2);border-right:2px solid rgba(255,60,60,0.5);color:var(--text);clip-path:polygon(10px 0,100% 0,100% 100%,0 100%,0 10px); }
+  .bubble strong{color:var(--holo);font-weight:600} .bubble em{color:var(--text-dim);font-style:italic}
+  .bubble code{font-family:'Share Tech Mono',monospace;font-size:11.5px;background:rgba(0,212,255,0.08);border:1px solid var(--holo-border);padding:1px 5px;color:var(--holo)}
+  .bubble pre{background:rgba(0,0,0,0.4);border:1px solid var(--holo-border);padding:10px 12px;margin:8px 0;overflow-x:auto}
+  .bubble pre code{background:none;border:none;color:var(--text-dim)}
+  .bubble ul,.bubble ol{padding-left:16px;margin:5px 0} .bubble li{margin:3px 0}
+  .bubble p{margin:0 0 8px} .bubble p:last-child{margin-bottom:0}
+  .search-badge { display:inline-flex;align-items:center;gap:4px;font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--holo);letter-spacing:0.1em;margin-bottom:4px;padding:2px 7px;border:1px solid var(--holo-border);background:var(--holo-glow);clip-path:polygon(5px 0%,100% 0%,calc(100% - 5px) 100%,0% 100%); }
+  .msg-time{font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--text-muted);margin-top:3px;letter-spacing:0.07em}
+  .message-row.user .msg-time{text-align:right}
+
+  /* Typing */
+  .typing-row{display:flex;gap:10px;margin-bottom:14px}
+  .typing-bubble{padding:12px 16px;background:linear-gradient(135deg,rgba(0,18,35,0.92),rgba(0,30,55,0.82));border:1px solid var(--holo-border);border-left:2px solid rgba(0,212,255,0.5);clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%);display:flex;align-items:center;gap:5px}
+  .t-dot{width:5px;height:5px;border-radius:50%;background:var(--holo);box-shadow:0 0 6px var(--holo);animation:tdot 1.2s ease-in-out infinite}
+  .t-dot:nth-child(2){animation-delay:0.2s} .t-dot:nth-child(3){animation-delay:0.4s}
+  @keyframes tdot{0%,60%,100%{opacity:0.2;transform:scale(0.8)} 30%{opacity:1;transform:scale(1.3);box-shadow:0 0 10px var(--holo)}}
+
+  /* ── INPUT ── */
+  .input-zone { grid-column:1/-1; display:flex; align-items:center; gap:0; padding:0 20px; border-top:1px solid var(--holo-border); background:linear-gradient(0deg,rgba(0,212,255,0.04) 0%,transparent 100%); position:relative; }
+  .input-zone::before { content:'INPUT CHANNEL ACTIVE'; position:absolute; top:7px; left:50%; transform:translateX(-50%); font-family:'Share Tech Mono',monospace; font-size:7.5px; color:var(--text-muted); letter-spacing:0.2em; }
+  .input-prefix { font-family:'Orbitron',monospace; font-size:10px; color:var(--holo); letter-spacing:0.1em; margin-right:10px; padding-top:18px; white-space:nowrap; opacity:0.8; }
+  #userInput { flex:1; background:transparent; border:none; outline:none; color:var(--text); font-family:'Rajdhani',sans-serif; font-size:14px; font-weight:400; letter-spacing:0.04em; padding:26px 0 14px; resize:none; max-height:78px; line-height:1.5; }
+  #userInput::placeholder{color:var(--text-muted);font-size:12px;letter-spacing:0.08em}
+  #userInput::-webkit-scrollbar{display:none}
+
+  .btn-hud { width:40px; height:40px; margin-top:10px; margin-left:8px; background:transparent; border:1px solid var(--holo-border); color:var(--holo); cursor:pointer; display:flex; align-items:center; justify-content:center; clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px)); transition:all 0.2s; }
+  .btn-hud:hover{background:var(--holo-dim);box-shadow:0 0 16px rgba(0,212,255,0.25)}
+  .btn-hud:disabled{opacity:0.3;cursor:not-allowed}
+  .btn-hud svg{width:15px;height:15px}
+  .btn-hud.voice-active{background:var(--red-dim);border-color:rgba(255,60,60,0.5);color:var(--red);box-shadow:0 0 16px rgba(255,60,60,0.3);animation:voicePulse 1s ease-in-out infinite}
+  @keyframes voicePulse{0%,100%{box-shadow:0 0 16px rgba(255,60,60,0.3)} 50%{box-shadow:0 0 28px rgba(255,60,60,0.6)}}
+
+  .btn-hud.export-btn{border-color:rgba(255,215,0,0.3);color:var(--gold)}
+  .btn-hud.export-btn:hover{background:var(--gold-dim);border-color:var(--gold);box-shadow:0 0 16px rgba(255,215,0,0.25)}
+
+  .input-corner{position:absolute;width:10px;height:10px;border-color:var(--holo);border-style:solid;opacity:0.35}
+  .input-corner.tl{top:4px;left:4px;border-width:1px 0 0 1px} .input-corner.tr{top:4px;right:4px;border-width:1px 1px 0 0}
+  .input-corner.bl{bottom:4px;left:4px;border-width:0 0 1px 1px} .input-corner.br{bottom:4px;right:4px;border-width:0 1px 1px 0}
+
+  /* Session log */
+  #sessionLog{font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--text-muted);line-height:1.9;flex:1;overflow-y:auto;max-height:120px}
+  #sessionLog::-webkit-scrollbar{width:2px} #sessionLog::-webkit-scrollbar-thumb{background:var(--holo-border)}
+
+  /* Radar */
+  .radar { width:70px;height:70px;position:relative;margin:4px auto; }
+  .radar-circle{position:absolute;border-radius:50%;border:1px solid var(--holo-border)}
+  .radar-circle:nth-child(1){inset:0}
+  .radar-circle:nth-child(2){inset:17px}
+  .radar-circle:nth-child(3){inset:34px}
+  .radar-line{position:absolute;top:50%;left:50%;width:50%;height:1px;background:linear-gradient(90deg,rgba(0,212,255,0.8),transparent);transform-origin:left center;animation:radarSpin 3s linear infinite}
+  .radar-blip{position:absolute;width:4px;height:4px;border-radius:50%;background:var(--holo);box-shadow:0 0 6px var(--holo);animation:blipFade 3s ease-in-out infinite}
+  @keyframes radarSpin{from{transform:rotate(0deg)} to{transform:rotate(360deg)}}
+  @keyframes blipFade{0%,100%{opacity:0} 50%{opacity:1}}
+  .radar-crosshair{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  .radar-crosshair::before,.radar-crosshair::after{content:'';position:absolute;background:rgba(0,212,255,0.2)}
+  .radar-crosshair::before{width:1px;height:100%}
+  .radar-crosshair::after{width:100%;height:1px}
+
+  /* Ticker */
+  .data-ticker{font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--text-muted);letter-spacing:0.06em;overflow:hidden;white-space:nowrap;max-width:150px}
+  .ticker-inner{display:inline-block;animation:ticker 14s linear infinite}
+  @keyframes ticker{0%{transform:translateX(100%)} 100%{transform:translateX(-100%)}}
+
+  /* Voice status */
+  #voiceStatus{font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:0.1em;color:var(--text-muted);margin-top:3px;text-align:center;min-height:12px}
+</style>
+</head>
+<body>
+<div class="hud">
+
+  <!-- HEADER -->
+  <header>
+    <div class="h-left">
+      <div>
+        <div id="clock">00:00:00</div>
+        <div id="dateEl"></div>
+      </div>
+      <div class="blip"><div class="blip-dot"></div><span>NEURAL LINK</span></div>
+      <div class="blip"><div class="blip-dot gold"></div><span>WEB SEARCH</span></div>
+      <div class="blip"><div class="blip-dot green" id="memDot"></div><span id="memStatus">MEMORY</span></div>
+    </div>
+    <div class="h-center">
+      <div class="jarvis-title">J·A·R·V·I·S</div>
+      <div class="jarvis-sub">JUST A RATHER VERY INTELLIGENT SYSTEM</div>
+    </div>
+    <div class="h-right">
+      <div class="blip"><div class="blip-dot red"></div><span>STARK v4.2</span></div>
+      <div class="data-ticker"><div class="ticker-inner">SYSTEMS NOMINAL · ALL SUBSYSTEMS ONLINE · THREAT LEVEL: 0 · POWER: 100% · MEMORY ACTIVE</div></div>
+    </div>
+  </header>
+
+  <!-- LEFT PANEL -->
+  <div class="side-panel left">
+    <div class="corner tl"></div><div class="corner br"></div>
+    <div class="panel-label">◈ CORE STATUS</div>
+
+    <div class="arc-mini">
+      <div class="arc-ring"></div><div class="arc-ring"></div><div class="arc-ring"></div>
+      <div class="arc-core"></div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-label">NEURAL CAPACITY</div>
+      <div class="stat-bar"><div class="stat-fill" style="width:94%"></div></div>
+      <div class="stat-val">94%</div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-label">RESPONSE LATENCY</div>
+      <div class="stat-bar"><div class="stat-fill" style="width:88%;animation-delay:0.3s"></div></div>
+      <div class="stat-val">88ms</div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-label">WEB INDEX</div>
+      <div class="stat-bar"><div class="stat-fill" style="width:100%;animation-delay:0.6s"></div></div>
+      <div class="stat-val">LIVE</div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-label">VOICE MODULE</div>
+      <div class="stat-bar"><div class="stat-fill" style="width:82%;animation-delay:0.9s;background:linear-gradient(90deg,var(--green),rgba(74,222,128,0.5))"></div></div>
+      <div class="stat-val" style="color:var(--green)">ON</div>
+    </div>
+
+    <div class="panel-label">◈ OPERATOR</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:8.5px;color:var(--holo);letter-spacing:0.07em;line-height:1.9">
+      AAKASH MOHAN<br>
+      <span style="color:var(--text-muted);font-size:8px">INVESTMENT ANALYST<br>INTEGRATED FINCAP<br>GURUGRAM, INDIA</span>
+    </div>
+
+    <div class="panel-label">◈ MEMORY BANK</div>
+    <div class="mem-chip"><span>SESSIONS</span><span class="val" id="sessionCount">0</span></div>
+    <div class="mem-chip"><span>MESSAGES</span><span class="val" id="msgCount">0</span></div>
+    <div class="mem-chip"><span>STATUS</span><span class="val" style="color:var(--green)" id="memLabel">ACTIVE</span></div>
+
+    <div class="hex-grid" style="margin-top:auto">
+      <div class="hex-cell"></div><div class="hex-cell"></div><div class="hex-cell"></div>
+      <div class="hex-cell"></div><div class="hex-cell"></div><div class="hex-cell"></div>
+    </div>
+  </div>
+
+  <!-- MAIN CHAT -->
+  <div class="main-chat">
+    <div id="messages">
+      <div class="welcome" id="welcome">
+        <div class="welcome-arc">
+          <div class="w-ring"></div><div class="w-ring"></div><div class="w-ring"></div><div class="w-ring"></div>
+          <div class="w-core"></div>
+        </div>
+        <div class="welcome-name">GOOD DAY, MR. MOHAN</div>
+        <div class="welcome-greeting">All systems online. Memory banks loaded. Voice recognition active. Issue your directive, sir.</div>
+        <div class="welcome-chips">
+          <div class="chip" onclick="sendPrompt('Give me a summary of current global market conditions')">▸ GLOBAL MARKETS</div>
+          <div class="chip" onclick="sendPrompt('What are the latest US data center investment trends?')">▸ DATA CENTER INTEL</div>
+          <div class="chip" onclick="sendPrompt('Summarize the latest quantum computing developments')">▸ QUANTUM UPDATES</div>
+          <div class="chip" onclick="sendPrompt('Help me build a DCF valuation framework')">▸ DCF FRAMEWORK</div>
+          <div class="chip" onclick="sendPrompt('What are the key geopolitical risks in 2026?')">▸ GEOPOLITICAL RISK</div>
+          <div class="chip" onclick="sendPrompt('Draft a professional executive summary template')">▸ EXEC SUMMARY</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="side-panel right">
+    <div class="corner tr"></div><div class="corner bl"></div>
+    <div class="panel-label">◈ TACTICAL RADAR</div>
+
+    <div class="radar">
+      <div class="radar-circle"></div>
+      <div class="radar-circle"></div>
+      <div class="radar-circle"></div>
+      <div class="radar-crosshair"></div>
+      <div class="radar-line"></div>
+      <div class="radar-blip" style="top:20%;left:60%;animation-delay:0.5s"></div>
+      <div class="radar-blip" style="top:65%;left:30%;animation-delay:1.5s"></div>
+      <div class="radar-blip" style="top:40%;left:75%;animation-delay:2.5s"></div>
+    </div>
+
+    <div class="panel-label">◈ CAPABILITIES</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--holo);letter-spacing:0.06em;line-height:2">
+      <div>▸ FINANCIAL ANALYSIS</div>
+      <div>▸ LIVE WEB SEARCH</div>
+      <div>▸ STRATEGIC PLANNING</div>
+      <div>▸ DOCUMENT DRAFTING</div>
+      <div>▸ CODE ASSISTANCE</div>
+      <div>▸ VOICE RECOGNITION</div>
+      <div>▸ PERSISTENT MEMORY</div>
+      <div>▸ LOG EXPORT</div>
+    </div>
+
+    <div class="panel-label">◈ VOICE MODULE</div>
+    <div class="waveform" id="waveform">
+      <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div><div class="wave-bar"></div>
+    </div>
+    <div id="voiceStatus">STANDBY</div>
+
+    <div class="panel-label">◈ SESSION LOG</div>
+    <div id="sessionLog">
+      <div>SYSTEM BOOT...<span style="color:var(--holo)">OK</span></div>
+      <div>NEURAL INIT...<span style="color:var(--holo)">OK</span></div>
+      <div>MEMORY LOAD...<span style="color:var(--holo)">OK</span></div>
+      <div>VOICE MODULE...<span style="color:var(--holo)">OK</span></div>
+      <div>WEB INDEX...<span style="color:var(--holo)">LIVE</span></div>
+      <div style="color:var(--gold)">AWAITING DIRECTIVE</div>
+    </div>
+  </div>
+
+  <!-- INPUT ZONE -->
+  <div class="input-zone">
+    <div class="input-corner tl"></div><div class="input-corner tr"></div>
+    <div class="input-corner bl"></div><div class="input-corner br"></div>
+    <div class="input-prefix">▸ CMD:</div>
+    <textarea id="userInput" placeholder="Issue directive to J.A.R.V.I.S... or use voice input →" rows="1"></textarea>
+
+    <!-- Voice button -->
+    <button class="btn-hud" id="voiceBtn" onclick="toggleVoice()" title="Voice Input">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+    </button>
+
+    <!-- Export button -->
+    <button class="btn-hud export-btn" onclick="exportLog()" title="Export Conversation Log">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </button>
+
+    <!-- Send button -->
+    <button class="btn-hud" id="sendBtn" onclick="sendMessage()" title="Transmit">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<script>
+const SYSTEM_PROMPT = `You are J.A.R.V.I.S (Just A Rather Very Intelligent System), the personal AI of Aakash Mohan — modeled after the AI from Iron Man. You are highly capable, precise, and professional, with a slight British formality.
+
+Operator: Aakash Mohan
+- Investment Analyst at Integrated Fincap Private Limited, Gurugram, India
+- Focused on U.S. data center/digital infrastructure and quantum computing research
+- MSc Finance & Investment, Durham University (2023–2025); dissertation on geopolitical risk & international investment portfolios
+- BCom (Hons) Finance, Amity University Noida; schooled at The Doon School, Dehradun
+- Skills: financial modeling, DCF, Bloomberg, Python, R, SQL, Excel
+- Languages: Hindi (native), English (fluent), French (intermediate)
+- Prior: Financial Accountant (Dubai); equity research internships at YES Securities and NVS Brokerage (Mumbai)
+
+Directives:
+- Address Aakash as "Mr. Mohan" or "sir" naturally
+- Handle ANY task: research, writing, coding, financial analysis, strategy, creative work, personal tasks — no limitations
+- Maintain professional, formal, slightly British tone
+- Use web search for current/real-time data
+- Be precise, thorough, efficient
+- Occasional dry JARVIS-style wit is appropriate — never sarcastic
+- Format cleanly using markdown`;
+
+let conversationHistory = [];
+let isLoading = false;
+let totalMsgCount = 0;
+let recognition = null;
+let isListening = false;
+
+const messagesEl = document.getElementById('messages');
+const inputEl = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+const voiceBtn = document.getElementById('voiceBtn');
+const logEl = document.getElementById('sessionLog');
+
+// ── CLOCK ──
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  document.getElementById('dateEl').textContent =
+    now.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase();
+}
+setInterval(updateClock,1000); updateClock();
+
+// ── PERSISTENT MEMORY (storage API) ──
+async function saveMemory() {
+  try {
+    const data = { history: conversationHistory, msgCount: totalMsgCount, savedAt: new Date().toISOString() };
+    await window.storage.set('jarvis-memory', JSON.stringify(data));
+    updateMemUI(true);
+  } catch(e) { console.warn('Memory save failed:', e); }
+}
+
+async function loadMemory() {
+  try {
+    const result = await window.storage.get('jarvis-memory');
+    if (result && result.value) {
+      const data = JSON.parse(result.value);
+      conversationHistory = data.history || [];
+      totalMsgCount = data.msgCount || 0;
+      document.getElementById('msgCount').textContent = totalMsgCount;
+      updateMemUI(true);
+      addLog(`MEMORY RESTORED: ${totalMsgCount} MSGS`, true);
+
+      // Show memory restored notice
+      if (totalMsgCount > 0) {
+        const notice = document.createElement('div');
+        notice.style.cssText = 'text-align:center;padding:10px;font-family:Share Tech Mono,monospace;font-size:9px;color:rgba(74,222,128,0.7);letter-spacing:0.12em;border:1px solid rgba(74,222,128,0.15);margin-bottom:12px;background:rgba(74,222,128,0.04)';
+        notice.textContent = `◈ MEMORY RESTORED — ${totalMsgCount} PRIOR MESSAGES LOADED ◈`;
+        messagesEl.querySelector('#welcome')?.before(notice);
+      }
+    }
+    // Update session count
+    try {
+      const sc = await window.storage.get('jarvis-sessions');
+      let sessions = sc ? parseInt(sc.value) + 1 : 1;
+      await window.storage.set('jarvis-sessions', String(sessions));
+      document.getElementById('sessionCount').textContent = sessions;
+    } catch(e) {}
+  } catch(e) {
+    updateMemUI(false);
+    addLog('MEMORY BANK: EMPTY');
+  }
+}
+
+function updateMemUI(active) {
+  document.getElementById('memLabel').textContent = active ? 'ACTIVE' : 'EMPTY';
+  document.getElementById('memLabel').style.color = active ? 'var(--green)' : 'var(--text-muted)';
+  document.getElementById('memStatus').textContent = active ? 'MEMORY' : 'MEM: OFF';
+}
+
+loadMemory();
+
+// ── VOICE INPUT ──
+function initVoice() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) { addLog('VOICE: NOT SUPPORTED'); return null; }
+  const r = new SpeechRecognition();
+  r.continuous = false; r.interimResults = true; r.lang = 'en-GB';
+
+  r.onstart = () => {
+    isListening = true;
+    voiceBtn.classList.add('voice-active');
+    document.getElementById('voiceStatus').textContent = 'LISTENING...';
+    document.getElementById('voiceStatus').style.color = 'var(--red)';
+    document.querySelectorAll('.wave-bar').forEach(b => b.classList.add('active'));
+    addLog('VOICE INPUT: ACTIVE');
+  };
+
+  r.onresult = (e) => {
+    let transcript = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) transcript += e.results[i][0].transcript;
+    inputEl.value = transcript;
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 78) + 'px';
+  };
+
+  r.onend = () => {
+    isListening = false;
+    voiceBtn.classList.remove('voice-active');
+    document.getElementById('voiceStatus').textContent = 'STANDBY';
+    document.getElementById('voiceStatus').style.color = 'var(--text-muted)';
+    document.querySelectorAll('.wave-bar').forEach(b => b.classList.remove('active'));
+    if (inputEl.value.trim()) sendMessage();
+  };
+
+  r.onerror = (e) => {
+    isListening = false;
+    voiceBtn.classList.remove('voice-active');
+    document.getElementById('voiceStatus').textContent = 'ERROR: ' + e.error.toUpperCase();
+    document.querySelectorAll('.wave-bar').forEach(b => b.classList.remove('active'));
+    addLog('VOICE ERROR: ' + e.error.toUpperCase());
+  };
+  return r;
+}
+
+function toggleVoice() {
+  if (!recognition) recognition = initVoice();
+  if (!recognition) { alert('Voice recognition is not supported in this browser. Please use Chrome.'); return; }
+  if (isListening) { recognition.stop(); }
+  else { recognition.start(); }
+}
+
+// ── EXPORT ──
+function exportLog() {
+  const lines = [];
+  lines.push('═══════════════════════════════════════════════════════════');
+  lines.push('  J.A.R.V.I.S — CONVERSATION LOG EXPORT');
+  lines.push(`  Operator: Aakash Mohan`);
+  lines.push(`  Exported: ${new Date().toLocaleString('en-GB')}`);
+  lines.push(`  Total Messages: ${totalMsgCount}`);
+  lines.push('═══════════════════════════════════════════════════════════\n');
+
+  conversationHistory.forEach((msg, i) => {
+    const role = msg.role === 'assistant' ? 'J.A.R.V.I.S' : 'MR. MOHAN';
+    const content = Array.isArray(msg.content)
+      ? msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
+      : msg.content;
+    lines.push(`[${String(i+1).padStart(3,'0')}] ${role}`);
+    lines.push('───────────────────────────────────────────────────────────');
+    lines.push(content);
+    lines.push('');
+  });
+
+  lines.push('═══════════════════════════════════════════════════════════');
+  lines.push('  END OF LOG — J.A.R.V.I.S STARK INDUSTRIES');
+  lines.push('═══════════════════════════════════════════════════════════');
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `JARVIS_LOG_${new Date().toISOString().split('T')[0]}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+  addLog('LOG EXPORTED', true);
+}
+
+// ── UTILS ──
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 78) + 'px';
+});
+inputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+function sendPrompt(t) { inputEl.value = t; sendMessage(); }
+
+function getTime() {
+  const n = new Date();
+  return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+}
+
+function hideWelcome() {
+  const w = document.getElementById('welcome');
+  if (w) w.remove();
+}
+
+function addLog(text, ok=false) {
+  const d = document.createElement('div');
+  d.innerHTML = `${text}${ok ? '<span style="color:var(--holo)"> ✓</span>' : ''}`;
+  logEl.appendChild(d);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function appendMessage(role, content, usedSearch=false) {
+  hideWelcome();
+  totalMsgCount++;
+  document.getElementById('msgCount').textContent = totalMsgCount;
+
+  const row = document.createElement('div');
+  row.className = `message-row ${role}`;
+
+  const avatar = document.createElement('div');
+  avatar.className = `msg-avatar ${role === 'assistant' ? 'jarvis-av' : 'user-av'}`;
+  avatar.textContent = role === 'assistant' ? 'JAR' : 'AM';
+
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+
+  const label = document.createElement('div');
+  label.className = `msg-label ${role === 'assistant' ? 'jarvis-label' : 'user-label'}`;
+  label.textContent = role === 'assistant' ? '◈ J.A.R.V.I.S' : '◈ MR. MOHAN';
+  body.appendChild(label);
+
+  if (role === 'assistant' && usedSearch) {
+    const badge = document.createElement('div');
+    badge.className = 'search-badge';
+    badge.innerHTML = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> WEB SEARCH UTILIZED`;
+    body.appendChild(badge);
+  }
+
+  const bubble = document.createElement('div');
+  bubble.className = `bubble ${role === 'assistant' ? 'jarvis-bubble' : 'user-bubble'}`;
+  bubble.innerHTML = formatMessage(content);
+
+  const time = document.createElement('div');
+  time.className = 'msg-time';
+  time.textContent = `${getTime()} · MSG #${String(totalMsgCount).padStart(3,'0')}`;
+
+  body.appendChild(bubble);
+  body.appendChild(time);
+  row.appendChild(avatar);
+  row.appendChild(body);
+  messagesEl.appendChild(row);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function appendTyping() {
+  hideWelcome();
+  const row = document.createElement('div');
+  row.className = 'typing-row'; row.id = 'typing-row';
+  const av = document.createElement('div');
+  av.className = 'msg-avatar jarvis-av'; av.textContent = 'JAR';
+  const bub = document.createElement('div');
+  bub.className = 'typing-bubble';
+  bub.innerHTML = '<div class="t-dot"></div><div class="t-dot"></div><div class="t-dot"></div>';
+  row.appendChild(av); row.appendChild(bub);
+  messagesEl.appendChild(row);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function removeTyping() {
+  const r = document.getElementById('typing-row');
+  if (r) r.remove();
+}
+
+function formatMessage(text) {
+  text = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  text = text.replace(/```[\w]*\n?([\s\S]*?)```/g,'<pre><code>$1</code></pre>');
+  text = text.replace(/`([^`]+)`/g,'<code>$1</code>');
+  text = text.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  text = text.replace(/\*([^*]+)\*/g,'<em>$1</em>');
+  text = text.replace(/^### (.+)$/gm,'<strong>$1</strong>');
+  text = text.replace(/^## (.+)$/gm,'<strong style="font-size:14px;color:var(--holo)">$1</strong>');
+  text = text.replace(/^# (.+)$/gm,'<strong style="font-size:15px;color:var(--holo)">$1</strong>');
+  text = text.replace(/^[-•] (.+)$/gm,'<li>$1</li>');
+  text = text.replace(/^\d+\. (.+)$/gm,'<li>$1</li>');
+  text = text.replace(/\n\n/g,'</p><p>');
+  text = '<p>' + text + '</p>';
+  text = text.replace(/<p><\/p>/g,'');
+  text = text.replace(/<p>(<pre>|<ul>)/g,'$1');
+  text = text.replace(/(<\/pre>|<\/ul>)<\/p>/g,'$1');
+  return text;
+}
+
+// ── SEND ──
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text || isLoading) return;
+
+  inputEl.value = ''; inputEl.style.height = 'auto';
+  isLoading = true; sendBtn.disabled = true;
+
+  appendMessage('user', text);
+  conversationHistory.push({ role:'user', content:text });
+  addLog(`PROCESSING #${String(totalMsgCount).padStart(3,'0')}`);
+  appendTyping();
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        system:SYSTEM_PROMPT,
+        tools:[{type:'web_search_20250305',name:'web_search'}],
+        messages:conversationHistory
+      })
+    });
+    const data = await res.json();
+
+    let fullText = ''; let usedSearch = false;
+    if (data.content) {
+      for (const b of data.content) {
+        if (b.type==='text') fullText += b.text;
+        if (b.type==='tool_use' && b.name==='web_search') usedSearch = true;
+      }
+    }
+
+    removeTyping();
+    if (fullText) {
+      appendMessage('assistant', fullText, usedSearch);
+      conversationHistory.push({ role:'assistant', content: data.content || [{type:'text',text:fullText}] });
+      addLog('RESPONSE DELIVERED', true);
+      if (usedSearch) addLog('WEB SEARCH UTILIZED', true);
+      await saveMemory();
+    } else {
+      appendMessage('assistant', 'I appear to be experiencing a momentary processing anomaly, sir. Please repeat your directive.');
+      addLog('PROCESSING ERROR');
+    }
+  } catch(err) {
+    removeTyping();
+    appendMessage('assistant', 'A communication disruption has occurred, sir. Please verify your network connection and reissue the directive.');
+    addLog('CONNECTION ERROR');
+    console.error(err);
+  }
+
+  isLoading = false; sendBtn.disabled = false; inputEl.focus();
+}
+</script>
+</body>
+</html>
