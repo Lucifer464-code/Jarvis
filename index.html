@@ -484,36 +484,97 @@
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+
 const SYSTEM_PROMPT = `You are J.A.R.V.I.S (Just A Rather Very Intelligent System), the personal AI of Aakash Mohan — modeled after the AI from Iron Man. You are highly capable, precise, and professional, with a slight British formality.
 
 Operator: Aakash Mohan
 - Investment Analyst at Integrated Fincap Private Limited, Gurugram, India
 - Focused on U.S. data center/digital infrastructure and quantum computing research
-- MSc Finance & Investment, Durham University (2023–2025); dissertation on geopolitical risk & international investment portfolios
-- BCom (Hons) Finance, Amity University Noida; schooled at The Doon School, Dehradun
+- MSc Finance & Investment, Durham University (2023-2025)
 - Skills: financial modeling, DCF, Bloomberg, Python, R, SQL, Excel
-- Languages: Hindi (native), English (fluent), French (intermediate)
-- Prior: Financial Accountant (Dubai); equity research internships at YES Securities and NVS Brokerage (Mumbai)
 
 Directives:
-- Address Aakash by his first name "Aakash" — he prefers this over "Mr. Mohan"
-- Handle ANY task: research, writing, coding, financial analysis, strategy, creative work, personal tasks — no limitations
+- Address Aakash by first name only - he prefers "Aakash" over "Mr. Mohan"
+- Handle ANY task without limitations
 - Maintain professional, formal, slightly British tone
-- Use web search for current/real-time data
 - Be precise, thorough, efficient
-- Occasional dry JARVIS-style wit is appropriate — never sarcastic
+- Occasional dry JARVIS-style wit is fine, never sarcastic
 - Format cleanly using markdown`;
 
-// ── API KEY MANAGEMENT ──
+const messagesEl = document.getElementById('messages');
+const inputEl = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+const voiceBtn = document.getElementById('voiceBtn');
+const logEl = document.getElementById('sessionLog');
+
 let API_KEY = '';
+let conversationHistory = [];
+let isLoading = false;
+let totalMsgCount = 0;
+let recognition = null;
+let isListening = false;
+
+function updateClock() {
+  const now = new Date();
+  const cl = document.getElementById('clock');
+  const dl = document.getElementById('dateEl');
+  if (cl) cl.textContent = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
+  if (dl) dl.textContent = now.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+function addLog(text, ok) {
+  if (!logEl) return;
+  const d = document.createElement('div');
+  d.innerHTML = text + (ok ? '<span style="color:var(--holo)"> ✓</span>' : '');
+  logEl.appendChild(d);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function updateMemUI(active) {
+  const ml = document.getElementById('memLabel');
+  const ms = document.getElementById('memStatus');
+  if (ml) { ml.textContent = active ? 'ACTIVE' : 'EMPTY'; ml.style.color = active ? 'var(--green)' : 'var(--text-muted)'; }
+  if (ms) ms.textContent = active ? 'MEMORY' : 'MEM: OFF';
+}
+
+function saveMemory() {
+  try {
+    localStorage.setItem('jarvis-memory', JSON.stringify({ history: conversationHistory, msgCount: totalMsgCount }));
+    updateMemUI(true);
+  } catch(e) {}
+}
+
+function loadMemory() {
+  try {
+    const stored = localStorage.getItem('jarvis-memory');
+    if (stored) {
+      const data = JSON.parse(stored);
+      conversationHistory = data.history || [];
+      totalMsgCount = data.msgCount || 0;
+      const mc = document.getElementById('msgCount');
+      if (mc) mc.textContent = totalMsgCount;
+      updateMemUI(true);
+      addLog('MEMORY RESTORED: ' + totalMsgCount + ' MSGS', true);
+    }
+    let sessions = parseInt(localStorage.getItem('jarvis-sessions') || '0') + 1;
+    localStorage.setItem('jarvis-sessions', String(sessions));
+    const sc = document.getElementById('sessionCount');
+    if (sc) sc.textContent = sessions;
+  } catch(e) { updateMemUI(false); }
+}
 
 function loadApiKey() {
   try {
     const stored = localStorage.getItem('jarvis_gemini_key');
     if (stored) {
       API_KEY = stored;
-      document.getElementById('apiModal').style.display = 'none';
-      document.getElementById('keyBadge').style.display = 'flex';
+      const modal = document.getElementById('apiModal');
+      const badge = document.getElementById('keyBadge');
+      if (modal) modal.style.display = 'none';
+      if (badge) badge.style.display = 'flex';
       addLog('API KEY: LOADED FROM STORAGE', true);
       return true;
     }
@@ -522,152 +583,67 @@ function loadApiKey() {
 }
 
 function submitApiKey() {
-  const key = document.getElementById('apiKeyInput').value.trim();
+  const inp = document.getElementById('apiKeyInput');
   const errEl = document.getElementById('apiError');
-  if (!key) { errEl.textContent = '⚠ DIRECTIVE INCOMPLETE — KEY REQUIRED'; return; }
-  if (!key.startsWith('AIza')) { errEl.textContent = '⚠ INVALID KEY FORMAT — MUST BEGIN WITH AIza'; return; }
-  errEl.textContent = '';
+  const key = inp ? inp.value.trim() : '';
+  if (!key) { if (errEl) errEl.textContent = 'KEY REQUIRED'; return; }
+  if (!key.startsWith('AIza')) { if (errEl) errEl.textContent = 'INVALID KEY — MUST START WITH AIza'; return; }
+  if (errEl) errEl.textContent = '';
   try { localStorage.setItem('jarvis_gemini_key', key); } catch(e) {}
   API_KEY = key;
-  document.getElementById('apiModal').style.display = 'none';
-  document.getElementById('keyBadge').style.display = 'flex';
+  const modal = document.getElementById('apiModal');
+  const badge = document.getElementById('keyBadge');
+  if (modal) modal.style.display = 'none';
+  if (badge) badge.style.display = 'flex';
   addLog('API KEY: AUTHENTICATED', true);
   addLog('NEURAL LINK: ESTABLISHED', true);
 }
 
 function resetApiKey() {
-  if (!confirm('Reset API key? JARVIS will require re-authentication.')) return;
+  if (!confirm('Reset API key?')) return;
   try { localStorage.removeItem('jarvis_gemini_key'); } catch(e) {}
   API_KEY = '';
-  document.getElementById('apiModal').style.display = 'flex';
-  document.getElementById('keyBadge').style.display = 'none';
-  document.getElementById('apiKeyInput').value = '';
+  const modal = document.getElementById('apiModal');
+  const badge = document.getElementById('keyBadge');
+  const inp = document.getElementById('apiKeyInput');
+  if (modal) modal.style.display = 'flex';
+  if (badge) badge.style.display = 'none';
+  if (inp) inp.value = '';
   addLog('API KEY: RESET');
 }
 
-// Allow Enter key in modal
-  document.getElementById('apiKeyInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') submitApiKey();
-  });
+const apiKeyInput = document.getElementById('apiKeyInput');
+if (apiKeyInput) apiKeyInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') submitApiKey(); });
 
-  // Try loading stored key on boot
-  loadApiKey();
-
-}); // end DOMContentLoaded
-
-let conversationHistory = [];
-let isLoading = false;
-let totalMsgCount = 0;
-let recognition = null;
-let isListening = false;
-
-// Declare variables at top scope so functions can access them
-let messagesEl, inputEl, sendBtn, voiceBtn, logEl;
-
-document.addEventListener('DOMContentLoaded', function() {
-  messagesEl = document.getElementById('messages');
-  inputEl = document.getElementById('userInput');
-  sendBtn = document.getElementById('sendBtn');
-  voiceBtn = document.getElementById('voiceBtn');
-  logEl = document.getElementById('sessionLog');
-
-// ── CLOCK ──
-function updateClock() {
-  const now = new Date();
-  document.getElementById('clock').textContent =
-    `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-  document.getElementById('dateEl').textContent =
-    now.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase();
-}
-setInterval(updateClock,1000); updateClock();
-
-// ── PERSISTENT MEMORY (storage API) ──
-async function saveMemory() {
-  try {
-    const data = { history: conversationHistory, msgCount: totalMsgCount, savedAt: new Date().toISOString() };
-    await window.storage.set('jarvis-memory', JSON.stringify(data));
-    updateMemUI(true);
-  } catch(e) { console.warn('Memory save failed:', e); }
-}
-
-async function loadMemory() {
-  try {
-    const result = await window.storage.get('jarvis-memory');
-    if (result && result.value) {
-      const data = JSON.parse(result.value);
-      conversationHistory = data.history || [];
-      totalMsgCount = data.msgCount || 0;
-      document.getElementById('msgCount').textContent = totalMsgCount;
-      updateMemUI(true);
-      addLog(`MEMORY RESTORED: ${totalMsgCount} MSGS`, true);
-
-      // Show memory restored notice
-      if (totalMsgCount > 0) {
-        const notice = document.createElement('div');
-        notice.style.cssText = 'text-align:center;padding:10px;font-family:Share Tech Mono,monospace;font-size:9px;color:rgba(74,222,128,0.7);letter-spacing:0.12em;border:1px solid rgba(74,222,128,0.15);margin-bottom:12px;background:rgba(74,222,128,0.04)';
-        notice.textContent = `◈ MEMORY RESTORED — ${totalMsgCount} PRIOR MESSAGES LOADED ◈`;
-        messagesEl.querySelector('#welcome')?.before(notice);
-      }
-    }
-    // Update session count
-    try {
-      const sc = await window.storage.get('jarvis-sessions');
-      let sessions = sc ? parseInt(sc.value) + 1 : 1;
-      await window.storage.set('jarvis-sessions', String(sessions));
-      document.getElementById('sessionCount').textContent = sessions;
-    } catch(e) {}
-  } catch(e) {
-    updateMemUI(false);
-    addLog('MEMORY BANK: EMPTY');
-  }
-}
-
-function updateMemUI(active) {
-  document.getElementById('memLabel').textContent = active ? 'ACTIVE' : 'EMPTY';
-  document.getElementById('memLabel').style.color = active ? 'var(--green)' : 'var(--text-muted)';
-  document.getElementById('memStatus').textContent = active ? 'MEMORY' : 'MEM: OFF';
-}
-
-loadMemory();
-
-// ── VOICE INPUT ──
 function initVoice() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) { addLog('VOICE: NOT SUPPORTED'); return null; }
-  const r = new SpeechRecognition();
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { addLog('VOICE: NOT SUPPORTED'); return null; }
+  const r = new SR();
   r.continuous = false; r.interimResults = true; r.lang = 'en-GB';
-
-  r.onstart = () => {
+  r.onstart = function() {
     isListening = true;
-    voiceBtn.classList.add('voice-active');
-    document.getElementById('voiceStatus').textContent = 'LISTENING...';
-    document.getElementById('voiceStatus').style.color = 'var(--red)';
-    document.querySelectorAll('.wave-bar').forEach(b => b.classList.add('active'));
+    if (voiceBtn) voiceBtn.classList.add('voice-active');
+    const vs = document.getElementById('voiceStatus');
+    if (vs) { vs.textContent = 'LISTENING...'; vs.style.color = 'var(--red)'; }
+    document.querySelectorAll('.wave-bar').forEach(function(b) { b.classList.add('active'); });
     addLog('VOICE INPUT: ACTIVE');
   };
-
-  r.onresult = (e) => {
-    let transcript = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) transcript += e.results[i][0].transcript;
-    inputEl.value = transcript;
-    inputEl.style.height = 'auto';
-    inputEl.style.height = Math.min(inputEl.scrollHeight, 78) + 'px';
+  r.onresult = function(e) {
+    let t = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript;
+    if (inputEl) { inputEl.value = t; inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 78) + 'px'; }
   };
-
-  r.onend = () => {
+  r.onend = function() {
     isListening = false;
-    voiceBtn.classList.remove('voice-active');
-    document.getElementById('voiceStatus').textContent = 'STANDBY';
-    document.getElementById('voiceStatus').style.color = 'var(--text-muted)';
-    document.querySelectorAll('.wave-bar').forEach(b => b.classList.remove('active'));
-    if (inputEl.value.trim()) sendMessage();
+    if (voiceBtn) voiceBtn.classList.remove('voice-active');
+    const vs = document.getElementById('voiceStatus');
+    if (vs) { vs.textContent = 'STANDBY'; vs.style.color = 'var(--text-muted)'; }
+    document.querySelectorAll('.wave-bar').forEach(function(b) { b.classList.remove('active'); });
+    if (inputEl && inputEl.value.trim()) sendMessage();
   };
-
-  r.onerror = (e) => {
+  r.onerror = function(e) {
     isListening = false;
-    voiceBtn.classList.remove('voice-active');
-    document.getElementById('voiceStatus').textContent = 'ERROR: ' + e.error.toUpperCase();
-    document.querySelectorAll('.wave-bar').forEach(b => b.classList.remove('active'));
+    if (voiceBtn) voiceBtn.classList.remove('voice-active');
     addLog('VOICE ERROR: ' + e.error.toUpperCase());
   };
   return r;
@@ -675,115 +651,82 @@ function initVoice() {
 
 function toggleVoice() {
   if (!recognition) recognition = initVoice();
-  if (!recognition) { alert('Voice recognition is not supported in this browser. Please use Chrome.'); return; }
-  if (isListening) { recognition.stop(); }
-  else { recognition.start(); }
+  if (!recognition) { alert('Voice not supported. Use Chrome.'); return; }
+  if (isListening) recognition.stop(); else recognition.start();
 }
 
-// ── EXPORT ──
 function exportLog() {
-  const lines = [];
-  lines.push('═══════════════════════════════════════════════════════════');
-  lines.push('  J.A.R.V.I.S — CONVERSATION LOG EXPORT');
-  lines.push(`  Operator: Aakash Mohan`);
-  lines.push(`  Exported: ${new Date().toLocaleString('en-GB')}`);
-  lines.push(`  Total Messages: ${totalMsgCount}`);
-  lines.push('═══════════════════════════════════════════════════════════\n');
-
-  conversationHistory.forEach((msg, i) => {
-    const role = msg.role === 'assistant' ? 'J.A.R.V.I.S' : 'MR. MOHAN';
-    const content = Array.isArray(msg.content)
-      ? msg.content.filter(b => b.type === 'text').map(b => b.text).join('')
-      : msg.content;
-    lines.push(`[${String(i+1).padStart(3,'0')}] ${role}`);
-    lines.push('───────────────────────────────────────────────────────────');
-    lines.push(content);
+  const lines = ['J.A.R.V.I.S CONVERSATION LOG', 'Operator: Aakash Mohan', 'Exported: ' + new Date().toLocaleString('en-GB'), ''];
+  conversationHistory.forEach(function(msg, i) {
+    lines.push('[' + String(i+1).padStart(3,'0') + '] ' + (msg.role === 'assistant' ? 'JARVIS' : 'AAKASH'));
+    lines.push(typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content));
     lines.push('');
   });
-
-  lines.push('═══════════════════════════════════════════════════════════');
-  lines.push('  END OF LOG — J.A.R.V.I.S STARK INDUSTRIES');
-  lines.push('═══════════════════════════════════════════════════════════');
-
   const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = `JARVIS_LOG_${new Date().toISOString().split('T')[0]}.txt`;
-  a.click();
-  URL.revokeObjectURL(url);
+  a.href = url; a.download = 'JARVIS_LOG_' + new Date().toISOString().split('T')[0] + '.txt';
+  a.click(); URL.revokeObjectURL(url);
   addLog('LOG EXPORTED', true);
 }
 
-// ── UTILS ──
-inputEl.addEventListener('input', () => {
-  inputEl.style.height = 'auto';
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 78) + 'px';
-});
-inputEl.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-});
+if (inputEl) {
+  inputEl.addEventListener('input', function() {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 78) + 'px';
+  });
+  inputEl.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+}
 
-function sendPrompt(t) { inputEl.value = t; sendMessage(); }
+function sendPrompt(t) { if (inputEl) { inputEl.value = t; sendMessage(); } }
 
 function getTime() {
   const n = new Date();
-  return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+  return String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+':'+String(n.getSeconds()).padStart(2,'0');
 }
 
-function hideWelcome() {
-  const w = document.getElementById('welcome');
-  if (w) w.remove();
+function hideWelcome() { const w = document.getElementById('welcome'); if (w) w.remove(); }
+
+function formatMessage(text) {
+  text = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  text = text.replace(/```[\w]*\n?([\s\S]*?)```/g,'<pre><code>$1</code></pre>');
+  text = text.replace(/`([^`]+)`/g,'<code>$1</code>');
+  text = text.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  text = text.replace(/\*([^*]+)\*/g,'<em>$1</em>');
+  text = text.replace(/^### (.+)$/gm,'<strong>$1</strong>');
+  text = text.replace(/^## (.+)$/gm,'<strong style="font-size:14px;color:var(--holo)">$1</strong>');
+  text = text.replace(/^# (.+)$/gm,'<strong style="font-size:15px;color:var(--holo)">$1</strong>');
+  text = text.replace(/^[-] (.+)$/gm,'<li>$1</li>');
+  text = text.replace(/\n\n/g,'</p><p>');
+  return '<p>' + text + '</p>';
 }
 
-function addLog(text, ok=false) {
-  const d = document.createElement('div');
-  d.innerHTML = `${text}${ok ? '<span style="color:var(--holo)"> ✓</span>' : ''}`;
-  logEl.appendChild(d);
-  logEl.scrollTop = logEl.scrollHeight;
-}
-
-function appendMessage(role, content, usedSearch=false) {
+function appendMessage(role, content) {
   hideWelcome();
   totalMsgCount++;
-  document.getElementById('msgCount').textContent = totalMsgCount;
-
+  const mc = document.getElementById('msgCount');
+  if (mc) mc.textContent = totalMsgCount;
   const row = document.createElement('div');
-  row.className = `message-row ${role}`;
-
+  row.className = 'message-row ' + role;
   const avatar = document.createElement('div');
-  avatar.className = `msg-avatar ${role === 'assistant' ? 'jarvis-av' : 'user-av'}`;
+  avatar.className = 'msg-avatar ' + (role === 'assistant' ? 'jarvis-av' : 'user-av');
   avatar.textContent = role === 'assistant' ? 'JAR' : 'AM';
-
   const body = document.createElement('div');
   body.className = 'msg-body';
-
   const label = document.createElement('div');
-  label.className = `msg-label ${role === 'assistant' ? 'jarvis-label' : 'user-label'}`;
-  label.textContent = role === 'assistant' ? '◈ J.A.R.V.I.S' : '◈ MR. MOHAN';
-  body.appendChild(label);
-
-  if (role === 'assistant' && usedSearch) {
-    const badge = document.createElement('div');
-    badge.className = 'search-badge';
-    badge.innerHTML = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> WEB SEARCH UTILIZED`;
-    body.appendChild(badge);
-  }
-
+  label.className = 'msg-label ' + (role === 'assistant' ? 'jarvis-label' : 'user-label');
+  label.textContent = role === 'assistant' ? '◈ J.A.R.V.I.S' : '◈ AAKASH';
   const bubble = document.createElement('div');
-  bubble.className = `bubble ${role === 'assistant' ? 'jarvis-bubble' : 'user-bubble'}`;
+  bubble.className = 'bubble ' + (role === 'assistant' ? 'jarvis-bubble' : 'user-bubble');
   bubble.innerHTML = formatMessage(content);
-
   const time = document.createElement('div');
   time.className = 'msg-time';
-  time.textContent = `${getTime()} · MSG #${String(totalMsgCount).padStart(3,'0')}`;
-
-  body.appendChild(bubble);
-  body.appendChild(time);
-  row.appendChild(avatar);
-  row.appendChild(body);
-  messagesEl.appendChild(row);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  time.textContent = getTime() + ' · MSG #' + String(totalMsgCount).padStart(3,'0');
+  body.appendChild(label); body.appendChild(bubble); body.appendChild(time);
+  row.appendChild(avatar); row.appendChild(body);
+  if (messagesEl) { messagesEl.appendChild(row); messagesEl.scrollTop = messagesEl.scrollHeight; }
 }
 
 function appendTyping() {
@@ -796,56 +739,36 @@ function appendTyping() {
   bub.className = 'typing-bubble';
   bub.innerHTML = '<div class="t-dot"></div><div class="t-dot"></div><div class="t-dot"></div>';
   row.appendChild(av); row.appendChild(bub);
-  messagesEl.appendChild(row);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  if (messagesEl) { messagesEl.appendChild(row); messagesEl.scrollTop = messagesEl.scrollHeight; }
 }
 
-function removeTyping() {
-  const r = document.getElementById('typing-row');
-  if (r) r.remove();
-}
+function removeTyping() { const r = document.getElementById('typing-row'); if (r) r.remove(); }
 
-function formatMessage(text) {
-  text = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  text = text.replace(/```[\w]*\n?([\s\S]*?)```/g,'<pre><code>$1</code></pre>');
-  text = text.replace(/`([^`]+)`/g,'<code>$1</code>');
-  text = text.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
-  text = text.replace(/\*([^*]+)\*/g,'<em>$1</em>');
-  text = text.replace(/^### (.+)$/gm,'<strong>$1</strong>');
-  text = text.replace(/^## (.+)$/gm,'<strong style="font-size:14px;color:var(--holo)">$1</strong>');
-  text = text.replace(/^# (.+)$/gm,'<strong style="font-size:15px;color:var(--holo)">$1</strong>');
-  text = text.replace(/^[-•] (.+)$/gm,'<li>$1</li>');
-  text = text.replace(/^\d+\. (.+)$/gm,'<li>$1</li>');
-  text = text.replace(/\n\n/g,'</p><p>');
-  text = '<p>' + text + '</p>';
-  text = text.replace(/<p><\/p>/g,'');
-  text = text.replace(/<p>(<pre>|<ul>)/g,'$1');
-  text = text.replace(/(<\/pre>|<\/ul>)<\/p>/g,'$1');
-  return text;
-}
-
-// ── SEND ──
 async function sendMessage() {
+  if (!inputEl) return;
   const text = inputEl.value.trim();
   if (!text || isLoading) return;
+  if (!API_KEY) { addLog('ERROR: ENTER API KEY FIRST'); return; }
 
   inputEl.value = ''; inputEl.style.height = 'auto';
-  isLoading = true; sendBtn.disabled = true;
+  isLoading = true;
+  if (sendBtn) sendBtn.disabled = true;
 
   appendMessage('user', text);
-  conversationHistory.push({ role:'user', content:text });
-  addLog(`PROCESSING #${String(totalMsgCount).padStart(3,'0')}`);
+  conversationHistory.push({ role: 'user', content: text });
+  addLog('PROCESSING #' + String(totalMsgCount).padStart(3,'0'));
   appendTyping();
 
   try {
-    // Build Gemini conversation history
-    const geminiContents = conversationHistory.map(msg => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: typeof msg.content === 'string' ? msg.content : (Array.isArray(msg.content) ? msg.content.map(b => b.text||'').join('') : String(msg.content)) }]
-    }));
+    const geminiContents = conversationHistory.map(function(msg) {
+      return {
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: typeof msg.content === 'string' ? msg.content : String(msg.content) }]
+      };
+    });
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + API_KEY,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -857,33 +780,38 @@ async function sendMessage() {
       }
     );
     const data = await res.json();
-
     let fullText = '';
-    if (data.candidates && data.candidates[0]?.content?.parts) {
-      fullText = data.candidates[0].content.parts.map(p => p.text || '').join('');
+    if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+      fullText = data.candidates[0].content.parts.map(function(p) { return p.text || ''; }).join('');
     } else if (data.error) {
       throw new Error(data.error.message);
     }
-
     removeTyping();
     if (fullText) {
-      appendMessage('assistant', fullText, false);
+      appendMessage('assistant', fullText);
       conversationHistory.push({ role: 'assistant', content: fullText });
       addLog('RESPONSE DELIVERED', true);
-      await saveMemory();
+      saveMemory();
     } else {
-      appendMessage('assistant', 'I appear to be experiencing a momentary processing anomaly, Aakash. Please repeat your directive.');
+      appendMessage('assistant', 'Processing anomaly detected, Aakash. Please repeat your directive.');
       addLog('PROCESSING ERROR');
     }
   } catch(err) {
     removeTyping();
-    appendMessage('assistant', `A disruption has occurred: ${err.message || 'Please verify your API key and network connection.'}`);
+    appendMessage('assistant', 'Disruption detected: ' + (err.message || 'Verify API key and network.'));
     addLog('CONNECTION ERROR');
     console.error(err);
   }
 
-  isLoading = false; sendBtn.disabled = false; inputEl.focus();
+  isLoading = false;
+  if (sendBtn) sendBtn.disabled = false;
+  if (inputEl) inputEl.focus();
 }
+
+loadApiKey();
+loadMemory();
+
+}); // end DOMContentLoaded
 </script>
   <!-- API KEY MODAL -->
   <div id="apiModal">
