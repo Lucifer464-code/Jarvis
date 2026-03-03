@@ -546,12 +546,14 @@ function resetApiKey() {
 }
 
 // Allow Enter key in modal
-document.getElementById('apiKeyInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') submitApiKey();
-});
+  document.getElementById('apiKeyInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitApiKey();
+  });
 
-// Try loading stored key on boot
-loadApiKey();
+  // Try loading stored key on boot
+  loadApiKey();
+
+}); // end DOMContentLoaded
 
 let conversationHistory = [];
 let isLoading = false;
@@ -559,11 +561,15 @@ let totalMsgCount = 0;
 let recognition = null;
 let isListening = false;
 
-const messagesEl = document.getElementById('messages');
-const inputEl = document.getElementById('userInput');
-const sendBtn = document.getElementById('sendBtn');
-const voiceBtn = document.getElementById('voiceBtn');
-const logEl = document.getElementById('sessionLog');
+// Declare variables at top scope so functions can access them
+let messagesEl, inputEl, sendBtn, voiceBtn, logEl;
+
+document.addEventListener('DOMContentLoaded', function() {
+  messagesEl = document.getElementById('messages');
+  inputEl = document.getElementById('userInput');
+  sendBtn = document.getElementById('sendBtn');
+  voiceBtn = document.getElementById('voiceBtn');
+  logEl = document.getElementById('sessionLog');
 
 // ── CLOCK ──
 function updateClock() {
